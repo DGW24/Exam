@@ -1,4 +1,4 @@
-﻿const API_URL = "https://script.google.com/macros/s/AKfycbzf3HA0TYh-mJ_I968w8co2Q1JYByvEw-LEtIwDrH-IfDU8beEAyjFLeCS3urNY7-sC/exec";
+﻿const API_URL = "https://script.google.com/macros/s/AKfycbwv74lb8NvJZEvfBrKM3aq8Y6XnR3EsQ6xuPc0qyeeFfrfv2YAwyCM7IZowZoJuPjR0/exec";
 const AUTO_LOGOUT_MS = 2 * 60 * 1000;
 
 const state = {
@@ -17,6 +17,10 @@ const state = {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+const QUALIFICATIONS = ["Class 8", "Madhyamik", "Higher Secondary", "Graduate", "Post Graduate", "Diploma", "Other"];
+const TARGET_EXAMS = ["SSC", "Railway", "WB Police", "KP Police", "ICDS", "Food", "SI", "Primary TET", "WBCS", "Group D", "Other"];
+const BATCHES = ["Morning", "Afternoon", "Evening", "Weekend"];
+const signupPhotoCrop = { file: null, imageUrl: "", x: 0.5, y: 0.5, dragging: false, lastX: 0, lastY: 0 };
 
 function showView(id) {
   const isAuthRequired = (id === "student" && !state.student) || (id === "admin" && !state.admin);
@@ -152,6 +156,21 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+function studentPhoto(student = state.student) {
+  return student?.photo_url || "https://ui-avatars.com/api/?background=0f766e&color=fff&name=" + encodeURIComponent(student?.name || "Student");
+}
+
+function optionList(items, selected = "") {
+  return items.map((item) => `<option value="${esc(item)}" ${item === selected ? "selected" : ""}>${esc(item)}</option>`).join("");
+}
+
+function setPreviewImage(img, src, position = "50% 50%") {
+  if (!img || !src) return;
+  img.src = src;
+  img.style.objectPosition = position;
+  img.classList.remove("hidden");
+}
+
 function actionButtons(buttons) {
   return `<div class="action-row">${buttons.join("")}</div>`;
 }
@@ -162,6 +181,7 @@ function renderStudentDashboard() {
   $("#studentAuth").classList.add("hidden");
   $("#studentDashboard").classList.remove("hidden");
   $("#studentName").textContent = `Welcome, ${state.student.name}`;
+  renderStudentProfile(state.student);
   showView("student");
   loadStudentDashboard();
 }
@@ -173,6 +193,9 @@ async function loadStudentDashboard() {
   historyBox.innerHTML = loadingHtml("Loading result history", "dots", true);
   try {
     const data = await api("getStudentDashboard", { token: state.student.token });
+    state.student = data.student;
+    renderStudentProfile(data.student);
+    renderStudentPrintTools(data.exams);
     examBox.innerHTML = `
       <div class="mini-stats">
         <div><strong>${data.stats.total_exams}</strong><span>Tests</span></div>
@@ -186,7 +209,11 @@ async function loadStudentDashboard() {
         <div class="list-item exam-card" data-search="${esc(`${exam.exam_name} ${exam.exam_type} ${exam.subjects}`.toLowerCase())}">
           <strong>${esc(exam.exam_name)}</strong>
           <span>${esc(exam.exam_type)} | ${esc(exam.subjects)} | ${exam.total_questions} questions | ${exam.duration_minutes} min</span>
-          ${actionButtons([`<button class="primary" onclick="startExam('${esc(exam.exam_id)}', this)">Start Exam</button>`])}
+          ${actionButtons([
+            `<button class="primary" onclick="startExam('${esc(exam.exam_id)}', this)">Start Exam</button>`,
+            `<button class="secondary" onclick="printStudentExamPaper('${esc(exam.exam_id)}', this)">Print Paper</button>`,
+            `<button class="secondary" onclick="printOmr(this, ${Number(exam.total_questions || 100)})">OMR</button>`
+          ])}
         </div>
       `).join("") || "<p>No active exam found.</p>"}
     `;
@@ -202,6 +229,120 @@ async function loadStudentDashboard() {
   } catch (err) {
     examBox.innerHTML = `<div class="status-note error">${esc(err.message)}</div>`;
     historyBox.innerHTML = `<div class="status-note error">${esc(err.message)}</div>`;
+  }
+}
+
+function renderStudentProfile(student) {
+  const box = $("#studentProfile");
+  if (!box || !student) return;
+  box.innerHTML = `
+    <div class="student-card-top">
+      <img class="student-photo" src="${esc(studentPhoto(student))}" style="object-position:${esc(cropCssPosition(student.photo_position))}" alt="${esc(student.name)}">
+      <div>
+        <strong>${esc(student.name)}</strong>
+        <span>${esc(student.student_id)}</span>
+        <small>${esc(student.mobile)} | ${esc(student.email)}</small>
+      </div>
+    </div>
+    <div class="profile-lines">
+      <span><b>Father:</b> ${esc(student.father_name || "-")}</span>
+      <span><b>Mother:</b> ${esc(student.mother_name || "-")}</span>
+      <span><b>DOB:</b> ${esc(student.dob || "-")}</span>
+      <span><b>Gender:</b> ${esc(student.gender || "-")}</span>
+      <span><b>Qualification:</b> ${esc(student.qualification || "-")}</span>
+      <span><b>Target:</b> ${esc(student.exam_target || "-")} | <b>Batch:</b> ${esc(student.preferred_batch || "-")}</span>
+      <span><b>School:</b> ${esc(student.school || "-")}</span>
+      <span><b>Address:</b> ${esc(student.address || [student.village_town, student.post, student.police_station, student.district, student.pin].filter(Boolean).join(", ") || "-")}</span>
+      <span><b>Payment:</b> ${esc(student.payment_status || "pending")} ${student.payment_note ? "- " + esc(student.payment_note) : ""}</span>
+    </div>
+    ${actionButtons([
+      `<button class="primary" onclick="printStudentIdCard()">ID Card</button>`,
+      `<button class="secondary" onclick="toggleStudentProfileEditor()">Edit Profile</button>`,
+      `<button class="secondary" onclick="togglePasswordEditor()">Edit Password</button>`
+    ])}
+    <form id="studentProfileForm" class="inline-form hidden">
+      <input name="name" placeholder="Full name" value="${esc(student.name)}" required>
+      <input name="mobile" placeholder="Mobile" value="${esc(student.mobile)}" required>
+      <input name="email" type="email" placeholder="Email" value="${esc(student.email)}" required>
+      <input name="dob" type="date" value="${esc(student.dob)}" required>
+      <input name="photoUrl" placeholder="Photo data / URL" value="${esc(student.photo_url)}">
+      <input name="photoPosition" placeholder="Photo crop position" value="${esc(student.photo_position || "0.5,0.5")}">
+      <select name="gender"><option value="">Gender</option>${["Male", "Female", "Other"].map((g) => `<option value="${g}" ${student.gender === g ? "selected" : ""}>${g}</option>`).join("")}</select>
+      <input name="fatherName" placeholder="Father's name" value="${esc(student.father_name)}">
+      <input name="motherName" placeholder="Mother's name" value="${esc(student.mother_name)}">
+      <input name="guardianMobile" placeholder="Guardian mobile" value="${esc(student.guardian_mobile)}">
+      <input name="school" placeholder="School / College" value="${esc(student.school)}">
+      <select name="qualification"><option value="">Highest Qualification</option>${optionList(QUALIFICATIONS, student.qualification)}</select>
+      <input name="villageTown" placeholder="Village / Town" value="${esc(student.village_town)}">
+      <input name="post" placeholder="Post" value="${esc(student.post)}">
+      <input name="policeStation" placeholder="Police Station" value="${esc(student.police_station)}">
+      <input name="pin" placeholder="Pin" value="${esc(student.pin)}">
+      <input name="address" placeholder="Full address" value="${esc(student.address)}">
+      <input name="district" placeholder="District" value="${esc(student.district)}">
+      <select name="examTarget"><option value="">Target Exam</option>${optionList(TARGET_EXAMS, student.exam_target)}</select>
+      <select name="preferredBatch"><option value="">Preferred Batch</option>${optionList(BATCHES, student.preferred_batch)}</select>
+      <button class="primary" type="submit">Save Profile</button>
+    </form>
+    <form id="studentPasswordForm" class="inline-form hidden">
+      <input name="currentPassword" type="password" placeholder="Current password" required>
+      <input name="newPassword" type="password" placeholder="New password" required>
+      <button class="primary" type="submit">Change Password</button>
+    </form>
+  `;
+  $("#studentProfileForm")?.addEventListener("submit", saveStudentProfile);
+  $("#studentPasswordForm")?.addEventListener("submit", changeStudentPassword);
+}
+
+function renderStudentPrintTools(exams = []) {
+  const box = $("#studentPrintTools");
+  if (!box) return;
+  box.innerHTML = `
+    <div class="print-controls student-print-controls">
+      <select id="studentPrintExam">${exams.map((e) => `<option value="${esc(e.exam_id)}">${esc(e.exam_name)}</option>`).join("")}</select>
+      <button class="primary" onclick="printSelectedStudentPaper(this)">Question Paper</button>
+      <button class="secondary" onclick="printOmr(this)">OMR Sheet</button>
+    </div>
+  `;
+}
+
+function toggleStudentProfileEditor() {
+  $("#studentProfileForm")?.classList.toggle("hidden");
+}
+
+function togglePasswordEditor() {
+  $("#studentPasswordForm")?.classList.toggle("hidden");
+}
+
+async function saveStudentProfile(event) {
+  event.preventDefault();
+  const submitBtn = event.target.querySelector("button[type='submit']");
+  setButtonLoading(submitBtn, true, "Saving");
+  try {
+    const data = await api("updateStudentProfile", { token: state.student.token, profile: formData(event.target) });
+    state.student = data.student;
+    renderStudentProfile(state.student);
+    $("#studentName").textContent = `Welcome, ${state.student.name}`;
+    toast(data.message || "Profile updated.");
+  } catch (err) {
+    toast(err.message, "error");
+  } finally {
+    setButtonLoading(submitBtn, false);
+  }
+}
+
+async function changeStudentPassword(event) {
+  event.preventDefault();
+  const submitBtn = event.target.querySelector("button[type='submit']");
+  setButtonLoading(submitBtn, true, "Saving");
+  try {
+    const data = await api("changeStudentPassword", { token: state.student.token, ...formData(event.target) });
+    event.target.reset();
+    event.target.classList.add("hidden");
+    toast(data.message || "Password changed.");
+  } catch (err) {
+    toast(err.message, "error");
+  } finally {
+    setButtonLoading(submitBtn, false);
   }
 }
 
@@ -385,9 +526,10 @@ async function renderAdminStudents(box) {
     <div class="filter-row"><input id="studentSearch" placeholder="Search student" oninput="filterCards('studentSearch','student-card')"></div>
     <div class="list">
       ${data.students.map((s) => `
-        <div class="list-item student-card" data-search="${esc(`${s.name} ${s.mobile} ${s.email} ${s.status}`.toLowerCase())}">
+        <div class="list-item student-card" data-search="${esc(`${s.name} ${s.mobile} ${s.email} ${s.status} ${s.father_name} ${s.school} ${s.qualification} ${s.exam_target} ${s.payment_status}`.toLowerCase())}">
           <strong>${esc(s.name)} <small>(${esc(s.status)})</small></strong>
           <span>${esc(s.mobile)} | ${esc(s.email)} | ${esc(s.district)} | ${esc(s.exam_target)}</span>
+          <span>Father: ${esc(s.father_name || "-")} | School: ${esc(s.school || "-")} | Qualification: ${esc(s.qualification || "-")} | Batch: ${esc(s.preferred_batch || "-")} | Payment: ${esc(s.payment_status || "pending")}</span>
           ${actionButtons([
             `<button class="primary" onclick="setStudentStatus('${esc(s.student_id)}','approved', this)">Approve</button>`,
             `<button class="secondary" onclick="setStudentStatus('${esc(s.student_id)}','pending', this)">Pending</button>`,
@@ -745,12 +887,15 @@ function clearPrintableCache() {
   state.printableData = null;
 }
 
-async function getPrintableData() {
-  const examId = $("#printExam").value;
+async function getPrintableData(examId = $("#printExam")?.value, studentMode = false) {
   if (state.printableData && state.printableExamId === examId) {
     return state.printableData;
   }
-  const data = await api("getPrintableExam", { token: state.admin.token, examId });
+  const data = await api("getPrintableExam", {
+    token: studentMode ? state.student.token : state.admin.token,
+    examId,
+    admin: !studentMode
+  });
   state.printableExamId = examId;
   state.printableData = data;
   return data;
@@ -808,8 +953,53 @@ function renderQuestionPaper(data, withAnswers) {
   `;
 }
 
+function printSelectedStudentPaper(button = null) {
+  const examId = $("#studentPrintExam")?.value;
+  if (!examId) return toast("No exam selected.", "error");
+  printStudentExamPaper(examId, button);
+}
+
+async function printStudentExamPaper(examId, button = null) {
+  const win = openPrintWindow("<p>Preparing question paper...</p>", "Question Paper", false);
+  if (!win) return;
+  setButtonLoading(button, true, "Preparing");
+  try {
+    const data = await getPrintableData(examId, true);
+    writePrintWindow(win, renderQuestionPaper(data, false), "Question Paper", true);
+  } catch (err) {
+    win.close();
+    toast(err.message, "error");
+  } finally {
+    setButtonLoading(button, false);
+  }
+}
+
+function printStudentIdCard() {
+  if (!state.student) return;
+  const s = state.student;
+  openPrintWindow(`
+    <div class="id-card-print">
+      <div class="id-head"><h1>Digital Coaching</h1><p>Student Identity Card</p></div>
+      <div class="id-body">
+        <img src="${esc(studentPhoto(s))}" alt="" style="object-position:${esc(cropCssPosition(s.photo_position))}">
+        <div>
+          <h2>${esc(s.name)}</h2>
+          <p><b>ID:</b> ${esc(s.student_id)}</p>
+          <p><b>Father:</b> ${esc(s.father_name || "-")}</p>
+          <p><b>DOB:</b> ${esc(s.dob || "-")}</p>
+          <p><b>Mobile:</b> ${esc(s.mobile)}</p>
+          <p><b>School:</b> ${esc(s.school || "-")}</p>
+          <p><b>Address:</b> ${esc(s.address || s.district || "-")}</p>
+        </div>
+      </div>
+      <div class="id-foot">Authorized Signature __________________</div>
+    </div>
+  `, "Student ID Card");
+}
+
 function printOmr(button = null) {
-  const total = Number(prompt("How many OMR rows?", "100") || 100);
+  const suggestedTotal = arguments.length > 1 ? arguments[1] : 100;
+  const total = Number(prompt("How many OMR rows?", String(suggestedTotal || 100)) || suggestedTotal || 100);
   if (!total) return;
   setButtonLoading(button, true, "Opening");
   const rows = Array.from({ length: total }, (_, i) => `
@@ -833,6 +1023,13 @@ function printDocument(content, title = "Print", autoPrint = true) {
     .answer-key{color:#0f766e;font-weight:700}
     table{width:100%;border-collapse:collapse;font-size:13px}
     td{width:20%;border:1px solid #111827;padding:7px;text-align:center}
+    .id-card-print{width:86mm;min-height:54mm;border:2px solid #0f766e;border-radius:10px;padding:12px;margin:0 auto;font-size:12px}
+    .id-head{border-bottom:1px solid #99f6e4;margin-bottom:10px;padding-bottom:6px;text-align:center}
+    .id-head h1{font-size:18px;color:#0f766e}
+    .id-body{display:grid;grid-template-columns:24mm 1fr;gap:10px;align-items:start}
+    .id-body img{width:24mm;height:30mm;object-fit:cover;border:1px solid #94a3b8}
+    .id-body h2{font-size:16px;margin:0 0 4px}
+    .id-foot{margin-top:14px;text-align:right;font-weight:700}
   </style></head><body>${content}${autoPrint ? `<script>window.onload=function(){window.focus();window.print();};<\/script>` : ""}</body></html>`;
 }
 
@@ -854,15 +1051,131 @@ function openPrintWindow(content, title = "Print", autoPrint = true) {
 
 $$("[data-view]").forEach((btn) => btn.addEventListener("click", () => showView(btn.dataset.view)));
 
+function clamp(value, min = 0, max = 1) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function parseCropPosition(position = "0.5,0.5") {
+  if (String(position).includes(" ")) {
+    const [yPos, xPos] = String(position).split(" ");
+    return {
+      x: xPos === "left" ? 0 : xPos === "right" ? 1 : 0.5,
+      y: yPos === "top" ? 0 : yPos === "bottom" ? 1 : 0.5
+    };
+  }
+  const [x, y] = String(position).split(",").map((item) => Number(item));
+  return {
+    x: Number.isFinite(x) ? clamp(x) : 0.5,
+    y: Number.isFinite(y) ? clamp(y) : 0.5
+  };
+}
+
+function cropCssPosition(position = "0.5,0.5") {
+  const crop = parseCropPosition(position);
+  return `${Math.round(crop.x * 100)}% ${Math.round(crop.y * 100)}%`;
+}
+
+function updateCropPreview() {
+  const preview = $("#photoPreview");
+  const positionInput = $("#photoPosition");
+  if (!preview || !signupPhotoCrop.imageUrl) return;
+  preview.style.objectPosition = cropCssPosition(`${signupPhotoCrop.x},${signupPhotoCrop.y}`);
+  if (positionInput) positionInput.value = `${signupPhotoCrop.x.toFixed(4)},${signupPhotoCrop.y.toFixed(4)}`;
+}
+
+async function compressStudentPhoto(file, position = "0.5,0.5") {
+  if (!file) return "";
+  const image = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+  const size = 360;
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = size;
+  canvas.height = size;
+  const crop = parseCropPosition(position);
+  const scale = Math.max(size / image.width, size / image.height);
+  const drawW = image.width * scale;
+  const drawH = image.height * scale;
+  const x = Math.min(0, Math.max(size - drawW, (size / 2) - (image.width * crop.x * scale)));
+  const y = Math.min(0, Math.max(size - drawH, (size / 2) - (image.height * crop.y * scale)));
+  ctx.drawImage(image, x, y, drawW, drawH);
+  URL.revokeObjectURL(image.src);
+  return canvas.toDataURL("image/jpeg", 0.72);
+}
+
+async function updateSignupPhotoPreview() {
+  const input = $("#studentPhotoInput");
+  const cropper = $("#photoCropper");
+  const preview = $("#photoPreview");
+  const dataInput = $("#photoData");
+  if (!input?.files?.[0]) return;
+  try {
+    if (signupPhotoCrop.imageUrl) URL.revokeObjectURL(signupPhotoCrop.imageUrl);
+    signupPhotoCrop.file = input.files[0];
+    signupPhotoCrop.imageUrl = URL.createObjectURL(input.files[0]);
+    signupPhotoCrop.x = 0.5;
+    signupPhotoCrop.y = 0.5;
+    setPreviewImage(preview, signupPhotoCrop.imageUrl);
+    cropper?.classList.remove("hidden");
+    updateCropPreview();
+    dataInput.value = await compressStudentPhoto(signupPhotoCrop.file, $("#photoPosition")?.value);
+  } catch (err) {
+    toast("Photo could not be processed.", "error");
+  }
+}
+
+async function refreshCompressedSignupPhoto() {
+  if (!signupPhotoCrop.file) return;
+  const dataInput = $("#photoData");
+  dataInput.value = await compressStudentPhoto(signupPhotoCrop.file, $("#photoPosition")?.value);
+}
+
+function beginPhotoDrag(event) {
+  if (!signupPhotoCrop.imageUrl) return;
+  signupPhotoCrop.dragging = true;
+  signupPhotoCrop.lastX = event.clientX;
+  signupPhotoCrop.lastY = event.clientY;
+  $("#photoCropper")?.setPointerCapture?.(event.pointerId);
+}
+
+function dragPhoto(event) {
+  if (!signupPhotoCrop.dragging) return;
+  const cropper = $("#photoCropper");
+  const rect = cropper.getBoundingClientRect();
+  const dx = event.clientX - signupPhotoCrop.lastX;
+  const dy = event.clientY - signupPhotoCrop.lastY;
+  signupPhotoCrop.lastX = event.clientX;
+  signupPhotoCrop.lastY = event.clientY;
+  signupPhotoCrop.x = clamp(signupPhotoCrop.x - dx / rect.width);
+  signupPhotoCrop.y = clamp(signupPhotoCrop.y - dy / rect.height);
+  updateCropPreview();
+}
+
+function endPhotoDrag() {
+  if (!signupPhotoCrop.dragging) return;
+  signupPhotoCrop.dragging = false;
+  refreshCompressedSignupPhoto();
+}
+
 $("#registerForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const submitBtn = event.target.querySelector("button[type='submit']");
   setButtonLoading(submitBtn, true, "Creating");
   try {
-    const data = await api("registerStudent", formData(event.target));
+    const payload = formData(event.target);
+    if (payload.password !== payload.confirmPassword) throw new Error("Password and confirm password do not match.");
+    if (!payload.declaration) throw new Error("Please confirm the declaration.");
+    const data = await api("registerStudent", payload);
     setMessage("#signupMessage", `${data.message} Student ID: ${data.student_id}`, "success");
     toast(`Account created. Student ID: ${data.student_id}`);
     event.target.reset();
+    $("#photoCropper")?.classList.add("hidden");
+    if ($("#photoData")) $("#photoData").value = "";
+    signupPhotoCrop.file = null;
   } catch (err) {
     setMessage("#signupMessage", err.message, "error");
     toast(err.message, "error");
@@ -870,6 +1183,11 @@ $("#registerForm").addEventListener("submit", async (event) => {
     setButtonLoading(submitBtn, false);
   }
 });
+
+$("#studentPhotoInput")?.addEventListener("change", updateSignupPhotoPreview);
+$("#photoCropper")?.addEventListener("pointerdown", beginPhotoDrag);
+window.addEventListener("pointermove", dragPhoto);
+window.addEventListener("pointerup", endPhotoDrag);
 
 // à¦ªà§à¦°à¦¾à¦¤à¦¨ $("#loginForm").addEventListener... à¦ªà¦°à¦¿à¦¬à¦°à§à¦¤à¦¨ à¦•à¦°à§‡ à¦à¦Ÿà¦¿ à¦²à¦¿à¦–à§à¦¨:
 $("#loginForm").addEventListener("submit", async (event) => {

@@ -340,13 +340,71 @@
           </div>
           <button id="closeSignup" class="modal-close" type="button" title="Close">X</button>
         </div>
-        <form id="registerForm" class="panel glass-panel">
-          <input name="name" placeholder="Full name" required>
-          <input name="mobile" placeholder="Mobile number" required>
-          <input name="email" type="email" placeholder="Email ID" required>
-          <input name="password" type="password" placeholder="Password" required>
-          <input name="district" placeholder="District">
-          <input name="examTarget" placeholder="Exam target: SSC / ICDS / Railway">
+        <form id="registerForm" class="panel glass-panel signup-form">
+          <div class="form-section-title">Personal Details</div>
+          <input name="name" placeholder="Full Name" required>
+          <select name="gender" required>
+            <option value="">Gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+          <input name="dob" type="date" placeholder="Date of Birth" required>
+          <input name="fatherName" placeholder="Father's Name" required>
+          <input name="motherName" placeholder="Mother's Name (Optional)">
+          <input name="school" placeholder="School / College Name" required>
+          <select name="qualification" required>
+            <option value="">Highest Qualification</option>
+            <option value="Class 8">Class 8</option>
+            <option value="Madhyamik">Madhyamik</option>
+            <option value="Higher Secondary">Higher Secondary</option>
+            <option value="Graduate">Graduate</option>
+            <option value="Post Graduate">Post Graduate</option>
+            <option value="Diploma">Diploma</option>
+            <option value="Other">Other</option>
+          </select>
+          <div class="form-section-title">Address</div>
+          <input name="villageTown" placeholder="Village / Town" required>
+          <input name="post" placeholder="Post" required>
+          <input name="policeStation" placeholder="Police Station" required>
+          <select name="district" required>
+            <option value="">District</option>
+            <option>Alipurduar</option><option>Bankura</option><option>Birbhum</option><option>Cooch Behar</option><option>Dakshin Dinajpur</option><option>Darjeeling</option><option>Hooghly</option><option>Howrah</option><option>Jalpaiguri</option><option>Jhargram</option><option>Kalimpong</option><option>Kolkata</option><option>Malda</option><option>Murshidabad</option><option>Nadia</option><option>North 24 Parganas</option><option>Paschim Bardhaman</option><option>Paschim Medinipur</option><option>Purba Bardhaman</option><option>Purba Medinipur</option><option>Purulia</option><option>South 24 Parganas</option><option>Uttar Dinajpur</option>
+          </select>
+          <input name="pin" inputmode="numeric" maxlength="6" placeholder="Pin" required>
+          <input name="address" placeholder="Full Address">
+          <div class="form-section-title">Contact & Course</div>
+          <input name="mobile" placeholder="Mobile Number" required>
+          <input name="email" type="email" placeholder="Email Address" required>
+          <input name="guardianMobile" placeholder="Guardian Mobile Number" required>
+          <select name="examTarget" required>
+            <option value="">Select Target Exam</option>
+            <option>SSC</option><option>Railway</option><option>WB Police</option><option>KP Police</option><option>ICDS</option><option>Food</option><option>SI</option><option>Primary TET</option><option>WBCS</option><option>Group D</option><option>Other</option>
+          </select>
+          <select name="preferredBatch" required>
+            <option value="">Preferred Batch</option>
+            <option>Morning</option><option>Afternoon</option><option>Evening</option><option>Weekend</option>
+          </select>
+          <div class="form-section-title">Security & Photo</div>
+          <input name="password" type="password" placeholder="Create Password" required>
+          <input name="confirmPassword" type="password" placeholder="Confirm Password" required>
+          <div class="photo-upload">
+            <label class="photo-file">
+              <span>Upload Photo</span>
+              <input id="studentPhotoInput" type="file" accept="image/*">
+            </label>
+            <div id="photoCropper" class="photo-cropper hidden">
+              <img id="photoPreview" class="photo-preview" alt="Photo preview">
+              <span class="crop-crosshair"></span>
+            </div>
+            <p class="photo-help">Photo select করার পর ছবিটা drag করে মুখ মাঝখানে আনুন। Submit করার সময় crop + compress হয়ে data image হিসেবে save হবে।</p>
+            <input type="hidden" name="photoPosition" id="photoPosition" value="0.5,0.5">
+            <input type="hidden" name="photoUrl" id="photoData">
+          </div>
+          <label class="declaration-check">
+            <input name="declaration" type="checkbox" value="yes" required>
+            <span>আমি নিশ্চিত করছি যে উপরে প্রদত্ত সমস্ত তথ্য সঠিক।</span>
+          </label>
           <button class="primary" type="submit">Create Account</button>
           <p id="signupMessage" class="message"></p>
           <div class="auth-switch">
@@ -365,6 +423,14 @@
           <button id="studentLogout" class="secondary">Logout</button>
         </div>
         <div class="panel-grid">
+          <div class="panel glass-panel student-profile-panel">
+            <h3>Profile</h3>
+            <div id="studentProfile"></div>
+          </div>
+          <div class="panel glass-panel">
+            <h3>Offline Exam Print</h3>
+            <div id="studentPrintTools"></div>
+          </div>
           <div class="panel glass-panel">
             <h3>Available Exams</h3>
             <div id="examList" class="list"></div>

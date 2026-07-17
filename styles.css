@@ -720,7 +720,7 @@ body.auth-open .view.active .auth-modal:not(.hidden) {
 }
 
 .compact-auth {
-  width: min(820px, calc(100vw - 28px));
+  width: min(920px, calc(100vw - 28px));
 }
 
 .auth-head {
@@ -926,6 +926,58 @@ body.auth-open .view.active .auth-modal:not(.hidden) {
   gap: 18px;
 }
 
+.student-profile-panel {
+  grid-column: span 1;
+}
+
+.student-card-top {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.student-photo {
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
+  object-fit: cover;
+  border: 2px solid rgba(15, 118, 110, .24);
+  background: #e2e8f0;
+}
+
+.student-card-top strong,
+.student-card-top span,
+.student-card-top small,
+.profile-lines span {
+  display: block;
+}
+
+.student-card-top strong {
+  font-size: 22px;
+}
+
+.student-card-top span {
+  color: var(--brand);
+  font-weight: 900;
+}
+
+.student-card-top small,
+.profile-lines {
+  color: var(--muted);
+}
+
+.profile-lines {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+  line-height: 1.45;
+}
+
+.student-print-controls {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
 .panel {
   padding: 24px;
 }
@@ -940,6 +992,143 @@ input, select {
   border-radius: 14px;
   background: rgba(255, 255, 255, .82);
   outline: none;
+}
+
+.signup-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 22px;
+}
+
+.signup-form input,
+.signup-form select {
+  margin-bottom: 0;
+}
+
+.form-section-title {
+  grid-column: 1 / -1;
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(15, 118, 110, .12), rgba(37, 99, 235, .10));
+  color: var(--brand-dark);
+  font-weight: 900;
+}
+
+.photo-upload,
+.declaration-check {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.photo-upload,
+.declaration-check {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, .34);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .82);
+}
+
+.photo-file span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.photo-upload input[type="file"],
+.declaration-check input {
+  min-height: auto;
+  margin-bottom: 0;
+}
+
+.photo-cropper {
+  position: relative;
+  width: min(240px, 100%);
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 2px solid rgba(15, 118, 110, .35);
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.55) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(255,255,255,.55) 1px, transparent 1px),
+    #e2e8f0;
+  background-size: 33.33% 33.33%;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .62), 0 14px 34px rgba(15, 23, 42, .12);
+}
+
+.photo-cropper:active {
+  cursor: grabbing;
+}
+
+.photo-preview {
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  object-fit: cover;
+  border: 0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.crop-crosshair {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  border: 2px solid rgba(255, 255, 255, .94);
+  border-radius: 999px;
+  box-shadow: 0 0 0 999px rgba(15, 23, 42, .10), 0 0 0 1px rgba(15, 118, 110, .55);
+  pointer-events: none;
+}
+
+.crop-crosshair::before,
+.crop-crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, .96);
+}
+
+.crop-crosshair::before {
+  left: 50%;
+  top: -10px;
+  width: 2px;
+  height: 50px;
+  transform: translateX(-50%);
+}
+
+.crop-crosshair::after {
+  top: 50%;
+  left: -10px;
+  width: 50px;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+.photo-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.declaration-check {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.declaration-check input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
 }
 
 input:focus, select:focus {
@@ -1288,7 +1477,7 @@ input:focus, select:focus {
     width: 100%;
   }
 
-  .hero, .feature-grid, .split-section, .stats-band, .contact-section, .panel-grid, .print-controls, .inline-form {
+  .hero, .feature-grid, .split-section, .stats-band, .contact-section, .panel-grid, .print-controls, .inline-form, .signup-form {
     grid-template-columns: 1fr;
   }
 

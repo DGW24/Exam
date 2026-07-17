@@ -4,7 +4,7 @@ const DEFAULT_ADMIN_PASSWORD = "572594";
 
 const SCHEMA = {
   Questions: ["question_id", "exam_type", "subject", "topic", "question", "option_a", "option_b", "option_c", "option_d", "correct_answer", "explanation", "difficulty", "status"],
-  Students: ["student_id", "name", "mobile", "email", "password_hash", "district", "exam_target", "status", "created_at", "last_login"],
+  Students: ["student_id", "name", "mobile", "email", "password_hash", "district", "exam_target", "status", "created_at", "last_login", "photo_url", "address", "gender", "school", "father_name", "guardian_mobile", "payment_status", "payment_note", "dob", "mother_name", "qualification", "village_town", "post", "police_station", "pin", "preferred_batch", "photo_position", "declaration"],
   Exams: ["exam_id", "exam_name", "exam_type", "subjects", "total_questions", "duration_minutes", "marks_per_question", "negative_marks", "status", "created_at"],
   Results: ["result_id", "student_id", "exam_id", "exam_name", "student_name", "mobile", "total_questions", "attempted", "correct", "wrong", "skipped", "score", "percentage", "submitted_at", "answers_json"],
   Sessions: ["token", "user_type", "user_id", "created_at", "expires_at", "status"],
@@ -38,6 +38,8 @@ function doPost(e) {
       submitExam,
       getResultHistory,
       getResultDetails,
+      updateStudentProfile,
+      changeStudentPassword,
       adminLogin,
       getAdminDashboard,
       getAllStudents,
@@ -61,10 +63,11 @@ function doPost(e) {
 }
 
 function registerStudent(data) {
-  const required = ["name", "mobile", "email", "password"];
+  const required = ["name", "gender", "dob", "fatherName", "school", "qualification", "villageTown", "post", "policeStation", "district", "pin", "mobile", "email", "guardianMobile", "examTarget", "preferredBatch", "password", "declaration"];
   required.forEach((key) => {
     if (!data[key]) throw new Error(key + " required.");
   });
+  if (data.password !== data.confirmPassword) throw new Error("Password and confirm password do not match.");
   const students = readObjects("Students");
   const exists = students.some((s) => String(s.email).toLowerCase() === String(data.email).toLowerCase() || String(s.mobile) === String(data.mobile));
   if (exists) throw new Error("This email/mobile already exists.");
@@ -77,6 +80,24 @@ function registerStudent(data) {
     password_hash: hashPassword(data.password),
     district: data.district || "",
     exam_target: data.examTarget || data.exam_target || "",
+    photo_url: data.photoUrl || data.photo_url || "",
+    address: data.address || "",
+    gender: data.gender || "",
+    school: data.school || "",
+    father_name: data.fatherName || data.father_name || "",
+    guardian_mobile: data.guardianMobile || data.guardian_mobile || "",
+    payment_status: data.paymentStatus || data.payment_status || "pending",
+    payment_note: data.paymentNote || data.payment_note || "",
+    dob: data.dob || "",
+    mother_name: data.motherName || data.mother_name || "",
+    qualification: data.qualification || "",
+    village_town: data.villageTown || data.village_town || "",
+    post: data.post || "",
+    police_station: data.policeStation || data.police_station || "",
+    pin: data.pin || "",
+    preferred_batch: data.preferredBatch || data.preferred_batch || "",
+    photo_position: data.photoPosition || data.photo_position || "center center",
+    declaration: data.declaration ? "yes" : "",
     status: "pending",
     created_at: now(),
     last_login: ""
@@ -212,6 +233,47 @@ function getResultDetails(data) {
   return { ok: true, result: hydrateResult(result) };
 }
 
+function updateStudentProfile(data) {
+  const student = requireStudent(data.token);
+  const profile = data.profile || {};
+  const updates = {
+    name: profile.name || student.name,
+    mobile: profile.mobile || student.mobile,
+    email: profile.email ? String(profile.email).toLowerCase() : student.email,
+    district: profile.district || "",
+    exam_target: profile.examTarget || profile.exam_target || "",
+    photo_url: profile.photoUrl || profile.photo_url || "",
+    address: profile.address || "",
+    gender: profile.gender || "",
+    school: profile.school || "",
+    father_name: profile.fatherName || profile.father_name || "",
+    guardian_mobile: profile.guardianMobile || profile.guardian_mobile || "",
+    payment_status: profile.paymentStatus || profile.payment_status || student.payment_status || "pending",
+    payment_note: profile.paymentNote || profile.payment_note || "",
+    dob: profile.dob || "",
+    mother_name: profile.motherName || profile.mother_name || "",
+    qualification: profile.qualification || "",
+    village_town: profile.villageTown || profile.village_town || "",
+    post: profile.post || "",
+    police_station: profile.policeStation || profile.police_station || "",
+    pin: profile.pin || "",
+    preferred_batch: profile.preferredBatch || profile.preferred_batch || "",
+    photo_position: profile.photoPosition || profile.photo_position || "center center",
+    declaration: profile.declaration ? "yes" : student.declaration || ""
+  };
+  updateById("Students", "student_id", student.student_id, updates);
+  return { ok: true, message: "Profile updated.", student: publicStudent({ ...student, ...updates }, data.token) };
+}
+
+function changeStudentPassword(data) {
+  const student = requireStudent(data.token);
+  if (!data.currentPassword || !data.newPassword) throw new Error("Current and new password required.");
+  if (student.password_hash !== hashPassword(data.currentPassword)) throw new Error("Current password is wrong.");
+  if (String(data.newPassword).length < 4) throw new Error("New password must be at least 4 characters.");
+  updateById("Students", "student_id", student.student_id, { password_hash: hashPassword(data.newPassword) });
+  return { ok: true, message: "Password changed successfully." };
+}
+
 function getPendingStudents(data) {
   requireAdmin(data.token);
   return { ok: true, students: readObjects("Students").filter((s) => s.status === "pending").map((s) => ({ ...s, password_hash: "" })) };
@@ -340,10 +402,23 @@ function getAllResults(data) {
 }
 
 function getPrintableExam(data) {
-  requireAdmin(data.token);
+  const isAdmin = Boolean(data.admin);
+  if (isAdmin) requireAdmin(data.token); else requireStudent(data.token);
   const exam = getById("Exams", "exam_id", data.examId);
   if (!exam) throw new Error("Exam not found.");
-  return { ok: true, exam, questions: pickQuestions(exam) };
+  const questions = pickQuestions(exam);
+  return {
+    ok: true,
+    exam,
+    questions: isAdmin ? questions : questions.map((q) => ({
+      question_id: q.question_id,
+      question: q.question,
+      option_a: q.option_a,
+      option_b: q.option_b,
+      option_c: q.option_c,
+      option_d: q.option_d
+    }))
+  };
 }
 
 function ensureSheet(ss, name, headers) {
@@ -354,6 +429,9 @@ function ensureSheet(ss, name, headers) {
   if (missingHeader) {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.setFrozenRows(1);
+  }
+  if (sheet.getLastColumn() < headers.length) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   }
   return sheet;
 }
@@ -540,6 +618,26 @@ function publicStudent(student, token) {
     name: student.name,
     mobile: student.mobile,
     email: student.email,
+    district: student.district || "",
+    exam_target: student.exam_target || "",
+    photo_url: student.photo_url || "",
+    address: student.address || "",
+    gender: student.gender || "",
+    school: student.school || "",
+    father_name: student.father_name || "",
+    guardian_mobile: student.guardian_mobile || "",
+    payment_status: student.payment_status || "pending",
+    payment_note: student.payment_note || "",
+    dob: student.dob || "",
+    mother_name: student.mother_name || "",
+    qualification: student.qualification || "",
+    village_town: student.village_town || "",
+    post: student.post || "",
+    police_station: student.police_station || "",
+    pin: student.pin || "",
+    preferred_batch: student.preferred_batch || "",
+    photo_position: student.photo_position || "center center",
+    declaration: student.declaration || "",
     status: student.status,
     token
   };
